@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Firebase JS SDK (v9+ Modular) -->
+   <script type="module">
+    // Firebase SDK imports for Firebase v9+ (modular approach)
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getDatabase, ref, get, set, update, push, remove } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+    
+    const firebaseConfig = {
+    apiKey: "AIzaSyCUduOP2eu1hhjNm9M7EKeBFPdy0CNHqwU",
+    authDomain: "navinrolls-fzbilling.firebaseapp.com",
+    databaseURL: "https://navinrolls-fzbilling-default-rtdb.firebaseio.com",
+    projectId: "navinrolls-fzbilling",
+    storageBucket: "navinrolls-fzbilling.firebasestorage.app",
+    messagingSenderId: "133912915246",
+    appId: "1:133912915246:web:12c27f3b8c33a8ced95ebf",
+    measurementId: "G-S8M650XRYR"
+  };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
+
+    // DOM Elements
+    const menuTableBody = document.getElementById('menu-table-body');
+    const addDishForm = document.getElementById('add-dish-form');
+    const addDishModal = new bootstrap.Modal(document.getElementById('addDishModal'));
+    const categorySelect = document.getElementById('category'); // Dropdown for categories
+    const addCategoryInput = document.getElementById('add-category-input'); // Input for new category
+
+    let editingDishId = null; // This will hold the ID of the dish being edited
+
+    // Load Categories
+    function loadCategories() {
+        const categoriesRef = ref(database, 'categories');
+        get(categoriesRef).then(snapshot => {
+            const categories = snapshot.val();
+            if (categories) {
+                categorySelect.innerHTML = ''; // Clear existing options
+                Object.keys(categories).forEach(key => {
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = categories[key];
+                    categorySelect.appendChild(option);
+                });
+            }
+        }).catch(error => console.error("Error loading categories:", error));
+    }
+
+    // Add New Category (Updated)
+    function addCategory(categoryName) {
+        const categoriesRef = ref(database, 'categories');
+        
+        // Use 'update' instead of 'set' to avoid overwriting the entire 'categories' node
+        const newCategory = {};
+        newCategory[categoryName] = categoryName; // Add the new category
+
+        update(categoriesRef, newCategory).then(() => {
+            loadCategories(); // Refresh the category dropdown
+            addCategoryInput.value = ''; // Clear the input field
+        }).catch(error => console.error("Error adding category:", error));
+    }
+
+  // Load Menu Items with Search
+function loadMenuItems(searchQuery = '') {
+    const menuRef = ref(database, 'menu');
+    get(menuRef)
+        .then(snapshot => {
+            const menuItems = snapshot.val();
+            menuTableBody.innerHTML = ''; // Clear the table
+
+            if (menuItems) {
+                Object.keys(menuItems).forEach(key => {
+                    const item = menuItems[key];
+
+                    // Match search query (case-insensitive)
+                    if (item.DishName.toLowerCase().includes(searchQuery.toLowerCase())) {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.DishName}</td>
+                            <td>${item.Category}</td>
+                            <td>₹${item.Price}</td>
+                            <td><img src="${item.ImageURL}" width="50" height="50" alt="${item.DishName}"></td>
+                            <td>
+                                <button class="btn btn-warning btn-sm edit-btn" data-id="${key}">Edit</button>
+                                <button class="btn btn-danger btn-sm delete-btn" data-id="${key}">Delete</button>
+                            </td>
+                        `;
+                        menuTableBody.appendChild(row);
+                    }
+                });
+            }
+        })
+        .catch(error => console.error("Error loading menu items:", error));
+}
+
+// Search Menu Items
+function searchMenuItems() {
+    const searchQuery = document.getElementById('search-bar').value.trim();
+    loadMenuItems(searchQuery); // Pass the query to the loader
+}
+
+// Attach Search Event Listener
+document.getElementById('search-bar').addEventListener('keyup', searchMenuItems);
+
+
+    // Add or Edit Dish
+    addDishForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const dishName = document.getElementById('dish-name').value;
+        const category = categorySelect.value;
+        const price = document.getElementById('price').value;
+        const imageUrl = document.getElementById('image-url').value;
+
+        if (editingDishId) {
+            // Edit dish
+            update(ref(database, 'menu/' + editingDishId), {
+                DishName: dishName,
+                Category: category,
+                Price: price,
+                ImageURL: imageUrl
+            }).then(() => {
+                loadMenuItems();  // Refresh the menu items
+                addDishModal.hide();
+                addDishForm.reset();
+                editingDishId = null; // Clear editing dish ID
+            });
+        } else {
+            // Add new dish
+            const newDishRef = push(ref(database, 'menu'));
+            set(newDishRef, {
+                DishName: dishName,
+                Category: category,
+                Price: price,
+                ImageURL: imageUrl
+            }).then(() => {
+                loadMenuItems();  // Refresh the menu items
+                addDishModal.hide();
+                addDishForm.reset();
+            });
+        }
+    });
+
+
+
+let dishToDeleteId = null;
+
+menuTableBody.addEventListener('click', function (e) {
+    // Handle Edit button click
+    if (e.target.classList.contains('edit-btn')) {
+        const dishId = e.target.getAttribute('data-id'); // Get dish ID
+        const dishRef = ref(database, 'menu/' + dishId);
+
+        // Fetch dish data from Firebase
+        get(dishRef).then(snapshot => {
+            const dish = snapshot.val();
+            if (dish) {
+                // Populate the modal form with the dish details
+                document.getElementById('dish-name').value = dish.DishName;
+                categorySelect.value = dish.Category;
+                document.getElementById('price').value = dish.Price;
+                document.getElementById('image-url').value = dish.ImageURL;
+
+                // Store the dish ID being edited
+                editingDishId = dishId;
+
+                // Show the modal
+                addDishModal.show();
+            } else {
+                console.error("Dish not found in Firebase.");
+            }
+        }).catch(error => console.error("Error fetching dish data:", error));
+    }
+});
+menuTableBody.addEventListener('click', function (e) {
+    if (e.target.classList.contains('delete-btn')) {
+        dishToDeleteId = e.target.getAttribute('data-id'); // Get dish ID
+        console.log('Dish to delete ID:', dishToDeleteId); // Debugging log
+
+        // Show the confirmation modal
+        const modalElement = document.getElementById('deleteConfirmationModal');
+        const deleteConfirmationModal = bootstrap.Modal.getOrCreateInstance(modalElement);
+        deleteConfirmationModal.show();
+    }
+});
+
+
+// Confirm deletion
+document.getElementById('confirm-delete-btn').addEventListener('click', function () {
+    if (dishToDeleteId) {
+        remove(ref(database, 'menu/' + dishToDeleteId))
+            .then(() => {
+                loadMenuItems(); // Refresh the menu items after deletion
+                const modalElement = document.getElementById('deleteConfirmationModal');
+                const deleteConfirmationModal = bootstrap.Modal.getOrCreateInstance(modalElement);
+                deleteConfirmationModal.hide(); // Close the modal
+                dishToDeleteId = null; // Reset the stored dish ID
+            })
+            .catch(error => console.error("Error deleting dish:", error));
+    }
+});
+
+// Cancel deletion
+document.getElementById('cancel-delete-btn').addEventListener('click', function () {
+    const modalElement = document.getElementById('deleteConfirmationModal');
+    const deleteConfirmationModal = bootstrap.Modal.getOrCreateInstance(modalElement);
+    deleteConfirmationModal.hide(); // Close the modal without taking action
+});
+
+
+
+
+
+    // Add Category Button Event
+    document.getElementById('add-category-btn').addEventListener('click', function() {
+        const categoryName = addCategoryInput.value;
+        if (categoryName) {
+            addCategory(categoryName); // Call the function to add the new category
+        } else {
+            alert('Please enter a category name.');
+        }
+    });
+
+    // Load items and categories on page load
+    window.onload = function() {
+        loadCategories();
+        loadMenuItems();  // Load all items initially
+    };
+</script>
+        
+    
+
+    <!-- Bootstrap and Popper JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.min.js" crossorigin="anonymous"></script>
+
+</head>
+<body>
+    <br>
+    <div class="container admin-panel">
+        <div class="row">
+            <div class="col-md-12">
+                <img src="images/FZBillinG Logo.png" style="height: 50px;">
+                
+                <!-- Add Dish Button -->
+                <button class="btn btn-primary add-dish-btn" id="add-dish-btn" data-bs-toggle="modal" data-bs-target="#addDishModal">Add Dish</button>
+                <button class="btn btn-primary add-dish-btn" onclick="window.location.href='mktad.html'">MKT</button>
+                <div class="mb-3">
+                    <input type="text" id="search-bar" class="form-control" placeholder="Search for a dish..." onkeyup="searchMenuItems()">
+                </div>
+                
+                <!-- Menu Table -->
+                <div class="card mt-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Menu Items</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-bordered table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Dish Name</th>
+                                    <th>Category</th>
+                                    <th>Price</th>
+                                    <th>Image</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="menu-table-body">
+                                <!-- Menu items will be loaded here dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Dish Modal -->
+        <div class="modal fade" id="addDishModal" tabindex="-1" aria-labelledby="addDishModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addDishModalLabel">Add Dish</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="add-dish-form">
+                            <div class="mb-3">
+                                <label for="dish-name" class="form-label">Dish Name</label>
+                                <input type="text" id="dish-name" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="category" class="form-label">Category</label>
+                                <select id="category" class="form-control" required>
+                                    <!-- Categories will be loaded here dynamically -->
+                                </select>
+                                <br>
+                                <input type="text" id="add-category-input" class="form-control" placeholder="Add New Category" />
+                                <button type="button" class="btn btn-success" id="add-category-btn">Add Category</button>
+                            </div>
+                            <div class="mb-3">
+                                <label for="price" class="form-label">Price</label>
+                                <input type="text" id="price" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="image-url" class="form-label">Image URL</label>
+                                <input type="text" id="image-url" class="form-control" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Save Dish</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="deleteConfirmationModal" tabindex="-1" aria-labelledby="deleteConfirmationModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteConfirmationModalLabel">Confirm Deletion</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Are you sure you want to delete this dish?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancel-delete-btn">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirm-delete-btn">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+
+
+
+</body>
+</html>

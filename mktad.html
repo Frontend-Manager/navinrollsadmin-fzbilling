@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Firebase JS SDK (v9+ Modular) -->
+    <script type="module">
+        // Firebase SDK imports for Firebase v9+ (modular approach)
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+        import { getDatabase, ref, get, set, push, remove, update } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+
+        const firebaseConfig = {
+    apiKey: "AIzaSyCUduOP2eu1hhjNm9M7EKeBFPdy0CNHqwU",
+    authDomain: "navinrolls-fzbilling.firebaseapp.com",
+    databaseURL: "https://navinrolls-fzbilling-default-rtdb.firebaseio.com",
+    projectId: "navinrolls-fzbilling",
+    storageBucket: "navinrolls-fzbilling.firebasestorage.app",
+    messagingSenderId: "133912915246",
+    appId: "1:133912915246:web:12c27f3b8c33a8ced95ebf",
+    measurementId: "G-S8M650XRYR"
+  };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        // DOM Elements for Banner Management
+        const bannerTableBody = document.getElementById('banner-table-body');
+        const addBannerForm = document.getElementById('add-banner-form');
+        const addBannerModal = new bootstrap.Modal(document.getElementById('addBannerModal'));
+
+        let editingBannerId = null;
+
+        // Load Banners
+        function loadBanners() {
+            const bannersRef = ref(database, 'banners');
+            get(bannersRef).then(snapshot => {
+                const banners = snapshot.val();
+                bannerTableBody.innerHTML = '';
+                
+                if (banners) {
+                    Object.keys(banners).forEach(key => {
+                        const banner = banners[key];
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${banner.text}</td>
+                            <td><img src="${banner.imageUrl}" width="100" height="50" alt="${banner.text}"></td>
+                            <td>
+                                <button class="btn btn-warning btn-sm edit-banner-btn" data-id="${key}">Edit</button>
+                                <button class="btn btn-danger btn-sm delete-banner-btn" data-id="${key}">Delete</button>
+                            </td>
+                        `;
+                        bannerTableBody.appendChild(row);
+                    });
+                }
+            }).catch(error => console.error("Error loading banners:", error));
+        }
+
+        // Add or Edit Banner
+        addBannerForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const bannerText = document.getElementById('banner-text').value;
+            const bannerImageUrl = document.getElementById('banner-image-url').value;
+
+            if (editingBannerId) {
+                // Edit banner
+                update(ref(database, 'banners/' + editingBannerId), {
+                    text: bannerText,
+                    imageUrl: bannerImageUrl
+                }).then(() => {
+                    loadBanners();
+                    addBannerModal.hide();
+                    addBannerForm.reset();
+                    editingBannerId = null; // Clear editing banner ID
+                });
+            } else {
+                // Add new banner
+                const newBannerRef = push(ref(database, 'banners'));
+                set(newBannerRef, {
+                    text: bannerText,
+                    imageUrl: bannerImageUrl
+                }).then(() => {
+                    loadBanners();
+                    addBannerModal.hide();
+                    addBannerForm.reset();
+                });
+            }
+        });
+
+        // Edit Banner
+        bannerTableBody.addEventListener('click', function(e) {
+            if (e.target.classList.contains('edit-banner-btn')) {
+                const bannerId = e.target.getAttribute('data-id');
+                const bannerRef = ref(database, 'banners/' + bannerId);
+                
+                get(bannerRef).then(snapshot => {
+                    const banner = snapshot.val();
+                    document.getElementById('banner-text').value = banner.text;
+                    document.getElementById('banner-image-url').value = banner.imageUrl;
+
+                    editingBannerId = bannerId;
+                    addBannerModal.show(); // Open the modal
+                }).catch(error => console.error("Error editing banner:", error));
+            }
+
+            // Delete Banner
+            if (e.target.classList.contains('delete-banner-btn')) {
+                const bannerId = e.target.getAttribute('data-id');
+                remove(ref(database, 'banners/' + bannerId)).then(() => {
+                    loadBanners();
+                });
+            }
+        });
+
+        // Load banners on page load
+        loadBanners();
+    </script>
+
+    <!-- Bootstrap and Popper JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div class="container admin-panel">
+        <div class="row">
+            <div class="col-md-12">
+                <br>
+                <br>
+                <img src="images/FZBillinG Logo.png" style="height: 50px;">
+
+                <!-- Existing Add Dish Button and Menu Table -->
+
+                <!-- Add Banner Button -->
+                <button class="btn btn-primary" id="add-banner-btn" data-bs-toggle="modal" data-bs-target="#addBannerModal">Add Banner</button>
+                <button class="btn btn-primary add-dish-btn" onclick="window.location.href='index.html'">Back</button>
+
+                <!-- Banners Table -->
+                <div class="card mt-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Banners</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-bordered table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Text</th>
+                                    <th>Image</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="banner-table-body">
+                                <!-- Banner items will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add/Edit Banner Modal -->
+        <div class="modal fade" id="addBannerModal" tabindex="-1" aria-labelledby="addBannerModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addBannerModalLabel">Add/Edit Banner</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="add-banner-form">
+                            <div class="mb-3">
+                                <label for="banner-text" class="form-label">Banner Text</label>
+                                <input type="text" class="form-control" id="banner-text" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="banner-image-url" class="form-label">Image URL</label>
+                                <input type="url" class="form-control" id="banner-image-url" required>
+                            </div>
+                            <button type="submit" class="btn btn-success">Save Banner</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>
